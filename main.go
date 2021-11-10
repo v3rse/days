@@ -8,12 +8,20 @@ import (
 	"time"
 )
 
+const ESTIMATED_YEARS = 70
+const PROGRESS_FILL_COUNT = 50
+const MAX_PRINT_WIDTH = 90
+
 type Habit struct {
 	Action    string    `json:"action"`
 	CreatedAt time.Time `json:"createAt"`
 }
 
-type Tracker []Habit
+type Tracker struct {
+	Start  time.Time `json:"start"`
+	Habits []Habit   `json:"habits"`
+	End    time.Time `json:"end"`
+}
 
 func NewTracker(decoder json.Decoder) (Tracker, error) {
 	var tracker Tracker
@@ -31,7 +39,7 @@ func check(err error) {
 }
 
 func usage(message string) {
-	fmt.Print("usage: days <track|since|reset|list> [habit]")
+	fmt.Print("usage: days <track|since|reset|list|life <start|end [-v]> > [habit]")
 	if message != "" {
 		fmt.Print(": ", message)
 	}
@@ -47,7 +55,7 @@ func initialize() *os.File {
 	check(err)
 
 	if info.Size() == 0 {
-		file.Write([]byte("[]"))
+		file.Write([]byte("{\"start\":null, \"habits\":[], \"end\": null}"))
 		file.Seek(0, 0)
 	}
 
@@ -62,8 +70,8 @@ func getHabitDescription(habit Habit) string {
 	return fmt.Sprintf("%s (%d days since)\n", habit.Action, getDaysSince(habit.CreatedAt))
 }
 
-func findHabitPosition(action string, tracker Tracker) (int, error) {
-	for i, habit := range tracker {
+func findHabitPosition(action string, habits []Habit) (int, error) {
+	for i, habit := range habits {
 		if habit.Action == action {
 			return i, nil
 		}
@@ -78,32 +86,109 @@ func writeTrackerTofile(tracker Tracker, file *os.File, encoder *json.Encoder) {
 }
 
 func track(habit string, tracker Tracker) Tracker {
-	newHabit := Habit{
+	newHabit := &Habit{
 		habit,
 		time.Now(),
 	}
-	newTracker := append(tracker, newHabit)
 
-	return newTracker
+	return Tracker{
+		Start:  tracker.Start,
+		Habits: append(tracker.Habits, *newHabit),
+	}
 }
 
 func list(tracker Tracker) {
-	for i, habit := range tracker {
+	for i, habit := range tracker.Habits {
 		fmt.Printf("%d) %s", i+1, getHabitDescription(habit))
 	}
 }
 
 func since(action string, tracker Tracker) {
-	p, err := findHabitPosition(action, tracker)
+	p, err := findHabitPosition(action, tracker.Habits)
 	check(err)
-	fmt.Println(getHabitDescription(tracker[p]))
+	fmt.Println(getHabitDescription(tracker.Habits[p]))
 }
 
 func reset(action string, tracker Tracker) Tracker {
-	p, err := findHabitPosition(action, tracker)
+	p, err := findHabitPosition(action, tracker.Habits)
 	check(err)
-	tracker[p].CreatedAt = time.Now()
+	tracker.Habits[p].CreatedAt = time.Now()
 	return tracker
+}
+
+func lifeStart(startDate string, tracker Tracker) Tracker {
+	t, err := time.Parse("2006-01-02", startDate)
+	estimatedEnd := t.AddDate(ESTIMATED_YEARS, 0, 0)
+	check(err)
+	return Tracker{
+		Start:  t,
+		Habits: tracker.Habits,
+		End:    estimatedEnd,
+	}
+}
+
+func printSummary(daysExpected int, daysSinceStart int, daysToEnd int) {
+	fmt.Println()
+	fmt.Println("Summary:")
+	fmt.Printf(`days expected: %d
+days exhausted: %d
+days till the END: %d
+`, daysExpected, daysSinceStart, daysToEnd)
+}
+
+func printProgressBar(daysExpected int, daysSinceStart int) {
+	fractionCompleted := float32(daysSinceStart) / float32(daysExpected)
+	percentageComplete := int(fractionCompleted * 100)
+
+	fillEnd := int(fractionCompleted * PROGRESS_FILL_COUNT)
+
+	fmt.Println()
+	fmt.Println("Progress:")
+	for i := 0; i < PROGRESS_FILL_COUNT; i++ {
+		if i > fillEnd {
+			fmt.Print("=")
+			continue
+		}
+		fmt.Print("#")
+	}
+
+	fmt.Printf(" %d%%\n", percentageComplete)
+}
+
+func printDetailGrid(daysExpected int, daysSinceStart int) {
+	fmt.Println()
+	fmt.Println("Details:")
+
+	for i := 0; i < MAX_PRINT_WIDTH+7; i++ {
+		fmt.Print("=")
+	}
+
+	fmt.Println()
+	for i := 0; i < daysExpected; i++ {
+		if i%MAX_PRINT_WIDTH == 0 {
+			fmt.Println()
+			fmt.Printf("%05d| ", i)
+		}
+		if i > daysSinceStart {
+			fmt.Print("o")
+			continue
+		}
+		fmt.Print("*")
+	}
+}
+
+func lifeEnd(verbose bool, tracker Tracker) {
+	daysSinceStart := getDaysSince(tracker.Start)
+	daysExpected := ESTIMATED_YEARS * 365
+	daysToEnd := daysExpected - daysSinceStart
+
+	printSummary(daysExpected, daysSinceStart, daysToEnd)
+
+	printProgressBar(daysExpected, daysSinceStart)
+
+	if verbose {
+		printDetailGrid(daysExpected, daysSinceStart)
+	}
 }
 
 func init() {
@@ -111,6 +196,10 @@ func init() {
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		usage("")
+	}
+
 	command := os.Args[1]
 	if command != "list" && len(os.Args) <= 2 {
 		usage("expected habit name")
@@ -140,6 +229,22 @@ func main() {
 		log.Printf("reseting count for %s...", os.Args[2])
 		updatedTracker := reset(os.Args[2], tracker)
 		writeTrackerTofile(updatedTracker, file, encoder)
+	case "life":
+		switch os.Args[2] {
+		case "start":
+			log.Printf("setting life start date...")
+			updatedTracker := lifeStart(os.Args[3], tracker)
+			writeTrackerTofile(updatedTracker, file, encoder)
+		case "end":
+			log.Printf("calculating approximately how long you may have till the end...")
+			verbose := false
+			if len(os.Args) == 4 && os.Args[3] == "-v" {
+				verbose = true
+			}
+			lifeEnd(verbose, tracker)
+		default:
+			usage("")
+		}
 	default:
 		usage("")
 	}
