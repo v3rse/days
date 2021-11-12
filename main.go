@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -70,13 +71,27 @@ func getHabitDescription(habit Habit) string {
 	return fmt.Sprintf("%s (%d days since)\n", habit.Action, getDaysSince(habit.CreatedAt))
 }
 
-func findHabitPosition(action string, habits []Habit) (int, error) {
+func findHabitPositionByAction(action string, habits []Habit) (int, error) {
 	for i, habit := range habits {
 		if habit.Action == action {
 			return i, nil
 		}
 	}
 	return -1, fmt.Errorf("habit not found")
+}
+
+func findHabitPosition(action string, habits []Habit) int {
+	var p int
+	index, err := strconv.ParseInt(action, 10, 64)
+	if err != nil {
+		var err error
+		p, err = findHabitPositionByAction(action, habits)
+		check(err)
+	} else {
+		p = int(index) - 1
+	}
+
+	return p
 }
 
 func writeTrackerTofile(tracker Tracker, file *os.File, encoder *json.Encoder) {
@@ -104,14 +119,12 @@ func list(tracker Tracker) {
 }
 
 func since(action string, tracker Tracker) {
-	p, err := findHabitPosition(action, tracker.Habits)
-	check(err)
+	p := findHabitPosition(action, tracker.Habits)
 	fmt.Println(getHabitDescription(tracker.Habits[p]))
 }
 
 func reset(action string, tracker Tracker) Tracker {
-	p, err := findHabitPosition(action, tracker.Habits)
-	check(err)
+	p := findHabitPosition(action, tracker.Habits)
 	tracker.Habits[p].CreatedAt = time.Now()
 	return tracker
 }
@@ -203,6 +216,10 @@ func main() {
 	command := os.Args[1]
 	if command != "list" && len(os.Args) <= 2 {
 		usage("expected habit name")
+	}
+
+	if command == "life" && os.Args[2] == "start" && len(os.Args) <= 3 {
+		usage("expected life start date in the form YYYY-MM-DD")
 	}
 
 	file := initialize()
