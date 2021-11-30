@@ -21,6 +21,12 @@ yet their span[a] is but toil and trouble;
 Humans live averagely for __70 years__
 
 ## Features
+- [x] `days journal write`
+    - create journal entry
+- [ ] `days journal read [start date] [end date]`
+    - _no args_: show entries for the day by the hour
+    - _start date_: show all entries after this date by the hour
+    - _start date, end date_: show all entries between these date by the hour
 - [x] `days life start "<birth-date>"` __NEW__
     - sets your birth date
 - [x] `days life end [-v]` __NEW__

@@ -13,7 +13,7 @@ type FileStore struct {
 	encoder *json.Encoder
 }
 
-func NewFileStore(fileName string) FileStore {
+func NewFileStore(fileName string, initVal []byte) FileStore {
 	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0666)
 	utils.Check(err)
 
@@ -26,7 +26,7 @@ func NewFileStore(fileName string) FileStore {
 		encoder,
 	}
 
-	store.init([]byte("{\"start\":null, \"habits\":[], \"end\": null}"))
+	store.init(initVal)
 
 	return store
 }
