@@ -67,26 +67,31 @@ func (j *Journal) list(start string, end string) []Entry {
 		utils.Check(err)
 	}
 
-	// find index of entry with earliest entry with created date day matching start
+	// find index of entry with earliest entry with created date
+  // matching or after start date
 	startIndex := -1
 	for i, entry := range j.Entries {
-		if startDate.Equal(entry.CreatedAt.Truncate(24 * time.Hour)) {
+		if startDate.Equal(entry.CreatedAt.Truncate(24 * time.Hour)) ||
+    startDate.Before(entry.CreatedAt.Truncate(24 * time.Hour)) {
 			startIndex = i
 			break
-		}
+		} 
 	}
 
 	if startIndex == -1 {
 		return []Entry{}
 	}
 
+  // find index of entry from the bottom with created date
+  // matching or before end date 
 	endIndex := len(j.Entries)
 	for i := len(j.Entries) - 1; i >= 0; i-- {
 		entry := j.Entries[i]
-		if endDate.Equal(entry.CreatedAt.Truncate(24 * time.Hour)) {
+		if endDate.Equal(entry.CreatedAt.Truncate(24 * time.Hour)) ||
+    endDate.After(entry.CreatedAt.Truncate(24 * time.Hour)) {
 			endIndex = i + 1
 			break
-		}
+    }
 	}
 
 	return j.Entries[startIndex:endIndex]
