@@ -8,11 +8,13 @@ import (
 	"reflect"
 	"strings"
 	"time"
+  "path/filepath"
 
 	"github.com/v3rse/days/store"
 	"github.com/v3rse/days/tracker"
 	"github.com/v3rse/days/utils"
 )
+
 
 func usage(message string) {
 	fmt.Print("usage: days <track|since|reset|list|life <start|end [-v]> >|journal <write|read> [habit]")
@@ -144,6 +146,26 @@ func printEntries(entries []Entry) {
 	}
 }
 
+func loadData() (tracker.Tracker, Journal, store.FileStore, store.FileStore) {
+ homeDirPath, _ := os.UserHomeDir()
+ appDir, _ := filepath.Abs(homeDirPath + "/.days")
+
+  if _, err := os.Stat(appDir); os.IsNotExist(err) {
+    err := os.Mkdir(appDir, os.ModePerm)
+    utils.Check(err)
+  }
+
+	trackInit := []byte("{\"start\":null, \"habits\":[], \"end\": null}")
+	trackerStore := store.NewFileStore(appDir+"/track.json", trackInit)
+	trk := tracker.NewTracker(trackerStore)
+
+	journalInit := []byte("{\"entries\":[], \"createdAt\":null, \"updatedAt\": null}")
+	journalStore := store.NewFileStore(appDir+"/journal.json", journalInit)
+	jnl := NewJournal(journalStore)
+
+  return trk, jnl, trackerStore, journalStore
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		usage("")
@@ -158,13 +180,7 @@ func main() {
 		usage("expected life start date in the form YYYY-MM-DD")
 	}
 
-	trackInit := []byte("{\"start\":null, \"habits\":[], \"end\": null}")
-	trackerStore := store.NewFileStore("track.json", trackInit)
-	trk := tracker.NewTracker(trackerStore)
-
-	journalInit := []byte("{\"entries\":[], \"createdAt\":null, \"updatedAt\": null}")
-	journalStore := store.NewFileStore("journal.json", journalInit)
-	jnl := NewJournal(journalStore)
+  trk, jnl, trackerStore, journalStore := loadData()
 
 	defer trackerStore.Close()
 	defer journalStore.Close()
