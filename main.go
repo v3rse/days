@@ -17,7 +17,7 @@ import (
 
 
 func usage(message string) {
-	fmt.Print("usage: days <track|since|reset|list|life <start|end [-v]> >|journal <write|read> [habit]")
+	fmt.Print("usage this is just to test my forge integration on emacs: days <track|since|reset|list|life <start|end [-v]> >|journal <write|read> [habit]")
 	if message != "" {
 		fmt.Print(": ", message)
 	}
